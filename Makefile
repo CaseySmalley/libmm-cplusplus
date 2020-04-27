@@ -1,9 +1,9 @@
 OUT:=bin/libmm
 SRC:=$(shell find ./src -type f -a -name "*.cpp")
 OBJ:=$(SRC:%.cpp=%.o)
-CC:=g++
-CFLAGS:=-nodefaultlibs -std=c++17 -o3 -I src/include -c
-LFLAGS:=-nodefaultlibs -lc
+CC:=gcc
+CFLAGS:=-fno-exceptions -nodefaultlibs -std=c++11 -o3 -I src/include -c
+LFLAGS:=-fno-exceptions -nodefaultlibs -lc
 
 ifeq ($(MAKECMDGOALS),debug)
 CFLAGS+= -DDEBUG 

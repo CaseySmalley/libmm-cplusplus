@@ -1,5 +1,6 @@
 #ifndef MM_COMMON_HPP
 #define MM_COMMON_HPP
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -38,27 +39,28 @@
 #endif
 
 #ifdef SHOW_ERRORS
-#define ERROR(...)\
+#define ERROR(code,...)\
 	fprintf(stderr,"\033[31mERROR\033[0m: ");\
 	fprintf(stderr,__VA_ARGS__);\
 	fprintf(stderr,"\n");\
-	exit(EXIT_FAILURE)
+	exit(code)
 #else
-#define ERROR(...)\
-	exit(EXIT_FAILURE)
+#define ERROR(code,...)\
+	exit(code)
 #endif
 
-#define ASSUME(cond,...)\
+#define ASSUME(cond,code,...)\
 	if (!(cond)) {\
 		WARNING(__VA_ARGS__);\
 	}
 
-#define ASSERT(cond,...)\
+#define ASSERT(cond,code,...)\
 	if (!(cond)) {\
 		ERROR(__VA_ARGS__);\
 	}
 
-#define STATIC_ASSERT(cond,msg)
+#define STATIC_ASSERT(cond,msg)\
+	static_assert(cond,"\033[31mERROR\033[0m: " msg)
 
 namespace mm {
 	using i8 = int8_t;
@@ -74,20 +76,11 @@ namespace mm {
 	using nullptr_t = decltype(nullptr);
 }
 
-inline void* operator new(mm::size_t length) {
-	return calloc(1,length);
-}
-
-inline void* operator new[](mm::size_t length) {
-	return calloc(1,length);
-}
-
-inline void operator delete(void *ptr) {
-	free(ptr);
-}
-
-inline void operator delete[](void *ptr) {
-	free(ptr);
-}
+void* operator new(mm::size_t bytes) { return malloc(bytes); }
+void* operator new(mm::size_t bytes,void* ptr) { return ptr; }
+void* operator new[](mm::size_t bytes) { return malloc(bytes); }
+void* operator new[](mm::size_t bytes,void* ptr) { return ptr; }
+void operator delete(void* ptr) { free(ptr); }
+void operator delete[](void* ptr) { free(ptr); }
 
 #endif

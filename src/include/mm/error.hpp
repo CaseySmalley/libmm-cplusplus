@@ -3,12 +3,17 @@
 #include "mm/utility.hpp"
 
 namespace mm {
-	namespace error {
-		// errors are functors, that can resolve their state & carry a string message
-		// make_error<T>(...) <-- use to construct error objects
-		// call handle<T>(error) to fix stuff (plan to abuse template deduction here)
-		// the caller is assumed to be responsible for cleaning stuff up
-	}
+	enum class error {
+		ERROR_GENERAL = 1,
+		ERROR_FAILED_ALLOC,
+		ERROR_UNITIALIZED_OPTIONAL
+	};
+
+	const char *error_msg[] = {
+		[ERROR_GENERAL] = "",
+		[ERROR_FAILED_ALLOC] = "failed to allocate memory",
+		[ERROR_UNITIALIZED_OPTIONAL] = "tried to accessed unitialized optional"
+	};
 }
 
 #endif
