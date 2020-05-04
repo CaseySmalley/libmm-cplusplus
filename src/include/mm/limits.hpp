@@ -2,7 +2,7 @@
 #define MM_LIMITS_HPP
 #include <limits.h>
 #include <float.h>
-#include "mm/common.hpp"
+#include "mm/type_traits.hpp"
 #define DECLARE_INT_LIMITS(type,_min,_max)\
 	template <>\
 	struct numeric_limits<type> {\
@@ -21,7 +21,7 @@
 	}
 
 namespace mm {
-	template <class T> struct numeric_limits { TRAIT_ERROR_MSG(T,"tried to use mm::numeric_limits with non specialised type"); };
+	template <class T> struct numeric_limits { static_assert(mm::deduced_false_t<T>::value,"tried to use mm::numeric_limits with non specialised type"); };
 
 	DECLARE_INT_LIMITS(bool,false,true);
 	DECLARE_INT_LIMITS(char,CHAR_MIN,CHAR_MAX);

@@ -1,7 +1,6 @@
-#include "mm/memory.hpp"
+#include "mm/iterator.hpp"
+#include <stdio.h>
 
 int main(int argc,const char *argv[]) {
-	mm::unique_ptr<int,mm::default_delete<int>> ptr;
-
 	return 0;
 }

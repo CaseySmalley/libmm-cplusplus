@@ -63,6 +63,8 @@
 	static_assert(cond,"\033[31mERROR\033[0m: " msg)
 
 namespace mm {
+	using c16 = char16_t;
+	using c32 = char32_t;
 	using i8 = int8_t;
 	using i16 = int16_t;
 	using i32 = int32_t;
