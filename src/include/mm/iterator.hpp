@@ -298,8 +298,242 @@ namespace mm {
 		back_insert_iterator() : m_container(nullptr) {}
 		back_insert_iterator(const container_type& c) : m_container(mm::address_of(c)) {}
 
-		
+		back_insert_iterator& operator=(const typename container_type::value_type& value) {
+			m_container->push_back(value);
+			return *this;
+		}
+
+		back_insert_iterator& operator=(typename container_type::value_type&& value) {
+			m_container->push_back(mm::move(value));
+			return *this;
+		}
+
+		back_insert_iterator& operator*() {
+			return *this;
+		}
+
+		back_insert_iterator& operator++() {
+			return *this;
+		}
+
+		back_insert_iterator& operator--() {
+			return *this;
+		}
 	};
+
+	template <class Container>
+	mm::back_insert_iterator<Container> back_inserter(Container& c) {
+		return mm::back_insert_iterator<Container>(c);
+	}
+
+	template <class Container>
+	class front_insert_iterator {
+	public:
+		using difference_type = void;
+		using value_type = void;
+		using pointer = void;
+		using reference = void;
+		using iterator_category = mm::output_iterator_tag;
+		using container_type = Container;
+
+	private:
+		container_type m_container;
+
+	public:
+		front_insert_iterator() : m_container(nullptr) {}
+		front_insert_iterator(const container_type& c) : m_container(mm::address_of(c)) {}
+
+		front_insert_iterator& operator=(const typename container_type::value_type& value) {
+			m_container->push_front(value);
+			return *this;
+		}
+
+		front_insert_iterator& operator=(typename container_type::value_type&& value) {
+			m_container->push_front(mm::move(value));
+			return *this;
+		}
+
+		front_insert_iterator& operator*() {
+			return *this;
+		}
+
+		front_insert_iterator& operator++() {
+			return *this;
+		}
+
+		front_insert_iterator& operator--() {
+			return *this;
+		}
+	};
+
+	template <class Container>
+	mm::front_insert_iterator<Container> front_inserter(Container& c) {
+		return mm::front_insert_iterator<Container>(c);
+	}
+
+	template <class Container>
+	class insert_iterator {
+	public:
+		using difference_type = void;
+		using value_type = void;
+		using pointer = void;
+		using reference = void;
+		using iterator_category = mm::output_iterator_tag;
+		using container_type = Container;
+
+	private:
+		container_type* m_container;
+		typename container_type::iterator m_it;
+
+	public:
+		insert_iterator(container_type& c,typename container_type::iterator it) : m_container(mm::address_of(c)), m_it(it) {}
+
+		insert_iterator& operator=(const typename container_type::value_type& value) {
+			m_container->insert(m_it,value);
+			++m_it;
+			return *this;
+		}
+
+		insert_iterator& operator=(typename container_type::value_type&& value) {
+			m_container->insert(m_it,mm::move(value));
+			++m_it;
+			return *this;
+		}
+
+		insert_iterator& operator*() {
+			return *this;
+		}
+
+		insert_iterator& operator++() {
+			return *this;
+		}
+
+		insert_iterator& operator--() {
+			return *this;
+		}
+	};
+
+	template <class Container>
+	mm::insert_iterator<Container> inserter(Container& c,typename Container::iterator it) {
+		return mm::insert_iterator<Container>(c,it);
+	}
+
+	namespace detail {
+		template <class Iter>
+		void advance_impl(Iter& it,typename mm::iterator_traits<Iter>::difference_type n,mm::input_iterator_tag) {
+			while (n > 0) {
+				--n;
+				++it;
+			}
+		}
+
+		template <class Iter>
+		void advance_impl(Iter& it,typename mm::iterator_traits<Iter>::difference_type n,mm::bidirectional_iterator_tag) {
+			while (n > 0) {
+				--n;
+				++it;
+			}
+
+			while (n < 0) {
+				++n;
+				--it;
+			}
+		}
+
+		template <class Iter>
+		void advance_impl(Iter& it,typename mm::iterator_traits<Iter>::difference_type n,mm::random_access_iterator_tag) {
+			it += n;
+		}
+	}
+
+	template <class Iter,class Distance>
+	void advance(Iter& it,Distance n) {
+		detail::advance_impl<Iter>(
+			it,
+			typename mm::iterator_traits<Iter>::difference_type(n),
+			mm::iterator_traits<Iter>::iterator_category
+		);
+	}
+
+	namespace detail {
+		template <class Iter>
+		typename mm::iterator_traits<Iter>::difference_type distance_impl(Iter first,Iter last,mm::input_iterator_tag) {
+			typename mm::iterator_traits<Iter>::difference_type n = 0;
+
+			while(first != last) {
+				++first;
+				++n;
+			}
+
+			return n;
+		}
+		
+		template <class Iter>
+		typename mm::iterator_traits<Iter>::difference_type distance_impl(Iter first,Iter last,mm::random_access_iterator_tag) {
+			return last - first;
+		}
+	}
+
+	template <class Iter>
+	typename mm::iterator_traits<Iter>::difference_type distance(Iter first,Iter last) {
+		return detail::distance_impl<Iter>(
+			first,
+			last,
+			mm::iterator_traits<Iter>::iterator_category
+		);
+	}
+
+	template <class ForwardIter>
+	ForwardIter next(ForwardIter it,typename mm::iterator_traits<ForwardIter>::difference_type n = 1) {
+		mm::advance(it,n);
+		return it;
+	}
+
+	template <class BidirIter>
+	BidirIter prev(BidirIter it,typename mm::iterator_traits<BidirIter>::difference_type n = 1) {
+		mm::advance(it,-n);
+		return it;
+	}
+
+	template <class Container>
+	auto begin(Container& c) -> decltype(c.begin()) {
+		return c.begin();
+	}
+
+	template <class Container>
+	auto cbegin(Container& c) -> decltype(c.cbegin()) {
+		return c.cbegin();
+	}
+
+	template <class Container>
+	auto end(Container& c) -> decltype(c.end()) {
+		return c.end();
+	}
+
+	template <class Container>
+	auto cend(Container& c) -> decltype(c.cend()) {
+		return c.cend();
+	}
+
+	template <class Container>
+	auto rbegin(Container& c) -> decltype(c.rbegin()) {
+		return c.rbegin();
+	}
+
+	template <class Container>
+	auto crbegin(Container& c) -> decltype(c.crbegin()) {
+		return c.crbegin();
+	}
+
+	template <class Container>
+	auto rend(Container& c) -> decltype(c.rend()) {
+		return c.rend();
+	}
+
+	template <class Container>
+	auto crend(Container& c) -> decltype(c.crend()) {
+		return c.crend();
+	}
 }
 
 #endif

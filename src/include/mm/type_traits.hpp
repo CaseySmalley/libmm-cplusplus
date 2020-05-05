@@ -43,9 +43,6 @@ namespace mm {
 	#elif defined(_MSC_VER)
 	#endif
 
-	template <class T> constexpr T min(const T lhs,const T rhs) { return lhs < rhs ? lhs : rhs; }
-	template <class T> constexpr T max(const T lhs,const T rhs) { return lhs > rhs ? lhs : rhs; }
-
 	using true_t = integral_constant<bool,true>;
 	using false_t = integral_constant<bool,false>;
 	
@@ -56,8 +53,9 @@ namespace mm {
 	template <class T,class F> struct condition<false,T,F> : type_identity<F> {};
 	template <bool B,class T = mm::true_t,class F = mm::false_t> using condition_t = typename condition<B,T,F>::type;
 
-	template <bool B,class T = void> struct enable_if {};
+	template <bool B,class T = mm::nullptr_t> struct enable_if {};
 	template <class T> struct enable_if<true,T> : type_identity<T> {};
+	template <bool B,class T = mm::nullptr_t> using enable_if_t = typename enable_if<B,T>::type;
 
 	template <class T> struct remove_const : type_identity<T> {};
 	template <class T> struct remove_const<const T> : type_identity<T> {};
@@ -354,6 +352,8 @@ namespace mm {
 	template <class T,class... Args> struct is_constructible : detail::is_constructible_impl<void,T,Args...> {};
 	template <class T> struct is_default_constructible : mm::is_constructible<T> {};
 	template <class T> struct is_trivially_default_constructible : mm::is_trivially_constructible<T> {};
+
+	template <class T> struct is_copy_constructible : mm::is_constructible<T,const T&>::type {};
 	template <class T> struct is_trivially_copy_constructible : mm::is_trivially_constructible<T,const T&> {};
 	
 	template <class T> struct is_move_constructible : mm::is_constructible< T, mm::add_rvalue_reference_t<T> > {};

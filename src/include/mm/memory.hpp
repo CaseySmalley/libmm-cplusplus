@@ -1,9 +1,25 @@
 #ifndef MM_MEMORY_HPP
 #define MM_MEMORY_HPP
-#include "mm/utility.hpp"
+#include "mm/iterator.hpp"
 #include "mm/limits.hpp"
 
 namespace mm {
+	template <mm::size_t Length,mm::size_t Alignment> 
+	struct aligned_storage {
+		struct type {
+			alignas(Alignment) mm::u8 data[Length];
+		};
+	};
+
+	template <mm::size_t Length,class... Ts>
+	struct aligned_union {
+		static constexpr mm::size_t alignment = mm::max(mm::integer_sequence<mm::size_t,alignof(Ts)...> {});
+
+		struct type {
+			alignas(alignment) mm::u8 data[mm::max(mm::integer_sequence<mm::size_t,Length,sizeof(Ts)...> {})];
+		};
+	};
+
 	namespace detail {
 		template <class Ptr> typename Ptr::element_type ptr_element_type(int);
 		template <class Ptr> mm::first_template_parameter_t<Ptr> ptr_element_type(...);
@@ -221,6 +237,176 @@ namespace mm {
 	}
 
 	template <class T,class Alloc> struct uses_allocator : decltype(detail::uses_allocator_impl<T,Alloc>(0)) {};
+
+	template <class T>
+	struct default_delete {
+		default_delete() = default;
+		default_delete(const default_delete&) = default;
+		default_delete(default_delete&&) = default;
+	
+		template <class U>
+		default_delete(const default_delete<T>&) {}
+
+		void operator()(T* p) const {
+			::operator delete(p);
+		}
+	};
+
+	template <class T>
+	struct default_delete<T[]> {
+		default_delete() = default;
+		default_delete(const default_delete&) = default;
+		default_delete(default_delete&&) = default;
+		
+		template <class U>
+		default_delete(const default_delete<T[]>&) {}
+
+		void operator()(T* p) const {
+			::operator delete[](p);
+		}
+	};
+
+	namespace detail {
+		template <class T,class Deleter> typename mm::remove_reference_t<Deleter>::type::pointer unique_ptr_pointer(int);
+		template <class T,class Deleter> T* unique_ptr_pointer(...);
+	}
+
+	template <class T,class Deleter = mm::default_delete<T>>
+	class unique_ptr {
+	public:
+		using pointer = decltype(detail::unique_ptr_pointer<T,Deleter>(0));
+		using element_type = T;
+		using deleter_type = Deleter;
+
+	private:
+		pointer m_ptr;
+		deleter_type m_del;
+
+	public:
+		unique_ptr(const unique_ptr&) = delete;
+		unique_ptr& operator=(const unique_ptr&) = delete;
+
+		constexpr unique_ptr() : m_ptr(), m_del() {}
+		constexpr unique_ptr(mm::nullptr_t) : m_ptr(), m_del() {}
+		explicit unique_ptr(pointer ptr) : m_ptr(ptr), m_del() {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_copy_constructible<D>::value
+		    && !mm::is_reference<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,const deleter_type& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_move_constructible<D>::value
+		    && !mm::is_reference<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,deleter_type&& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_lvalue_reference<D>::value
+		    && !mm::is_const<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,deleter_type& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+		       mm::is_lvalue_reference<D>::value
+		    && mm::is_const<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,const deleter_type& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_move_constructible<D>::value
+		> = nullptr>
+		unique_ptr(unique_ptr&& other) : m_ptr(other.release()), m_del(mm::move(other.get_deleter())) {}
+
+		template <class U,class E,mm::enable_if_t<
+			mm::is_convertible<typename unique_ptr<U,E>::pointer,pointer>::value
+		    && !mm::is_array<U>::value
+		    && ((mm::is_reference<deleter_type>::value && mm::is_same<deleter_type,E>::value)
+		    ||  (!mm::is_reference<deleter_type>::value && mm::is_convertible<E,deleter_type>::value))
+		> = nullptr>
+		unique_ptr(unique_ptr<U,E>&& other) : m_ptr(other.release()), m_del(mm::forward<E>(other.get_deleter())) {}
+
+		~unique_ptr() {
+			if (m_ptr) {
+				m_del(m_ptr);
+			}
+		}
+
+		template <class D = deleter_type,class = mm::enable_if_t<
+			mm::is_move_assignable<D>::value
+		>>
+		unique_ptr& operator=(unique_ptr&& other) {
+			reset(other.release());
+			m_del = mm::move(other.get_deleter());
+			return *this;
+		}
+
+		template <class U,class E,class = mm::enable_if_t<
+			!mm::is_array<U>::value
+		      && mm::is_convertible< typename unique_ptr<U,E>::pointer, pointer >::value
+		      && mm::is_assignable<deleter_type,E&&>::value
+		>>
+		unique_ptr& operator=(unique_ptr<U,E>&& other) {
+			reset(other.release());
+			m_del = mm::forward<E>(other.get_deleter());
+			return *this;
+		}
+
+		unique_ptr& operator=(mm::nullptr_t) {
+			reset();
+			return *this;
+		}
+
+		pointer release() {
+			pointer ptr = m_ptr;
+			m_ptr = pointer();
+			return ptr;
+		}
+
+		void reset(pointer ptr = pointer()) {
+			pointer old = m_ptr;
+			m_ptr = ptr;
+			
+			if (old) {
+				m_del(old);
+			}
+		}
+	
+		void swap(unique_ptr& other) {
+			mm::swap(this->m_ptr,other.m_ptr);
+			mm::swap(this->m_del,other.m_del);
+		}
+
+		pointer get() const {
+			return m_ptr;
+		}
+
+		deleter_type& get_deleter() {
+			return m_del;
+		}
+
+		const deleter_type& get_deleter() const {
+			return m_del;
+		}
+
+		explicit operator bool() const {
+			return m_ptr != nullptr;
+		}
+
+		mm::add_lvalue_reference_t<T> operator*() const {
+			return *m_ptr;
+		}
+
+		pointer operator->() const {
+			return m_ptr;
+		}
+	};
+
+	template <class T,class... Args>
+	mm::unique_ptr<T> make_unique(Args&&... args) {
+		return mm::unique_ptr<T>(new T(mm::forward<Args>(args)...));
+	}
 }
 
 #endif
