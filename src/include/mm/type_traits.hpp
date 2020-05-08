@@ -325,7 +325,6 @@ namespace mm {
 	     || (mm::is_void<T>::value && mm::is_void<U>::value)
 	> {};
 
-
 	namespace detail {
 		template <class T,class U = typename mm::remove_reference<T>::type> struct decay : mm::condition_t<
 			mm::is_array<U>::value,
@@ -335,7 +334,7 @@ namespace mm {
 				mm::add_pointer_t<U>,
 				mm::remove_cv_t<U>
 			>
-		> {};
+		>::type {};
 	}
 
 	template <class T> struct decay : detail::decay<T> {};

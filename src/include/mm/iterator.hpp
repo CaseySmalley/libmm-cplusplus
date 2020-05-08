@@ -161,6 +161,43 @@ namespace mm {
 		return mm::reverse_iterator<Iter>(it);
 	}
 
+	template <class Container>
+	class reverse_adapter {
+	public:
+		using container_type = Container;
+		using value_type = typename container_type::value_type;
+		using size_type = typename container_type::size_type;
+		using difference_type = typename container_type::difference_type;
+		using iterator = typename container_type::iterator;
+		using const_iterator = typename container_type::const_iterator;
+		using reverse_iterator = typename container_type::reverse_iterator;
+		using const_reverse_iterator = typename container_type::const_reverse_iterator;
+
+	private:
+		container_type& m_container;
+
+	public:
+		reverse_adapter() = delete;
+		reverse_adapter(const reverse_adapter&) = delete;
+		reverse_adapter(reverse_adapter&&) = delete;
+		reverse_adapter& operator=(const reverse_adapter&) = delete;
+		reverse_adapter& operator=(reverse_adapter&&) = delete;
+
+		reverse_adapter(const container_type& c) : m_container(c) {}
+
+		reverse_iterator begin() { return m_container.rbegin(); }
+		const_reverse_iterator cbegin() const { return m_container.crbegin(); }
+
+		reverse_iterator end() { return m_container.rend(); }
+		const_reverse_iterator cend() const { return m_container.crend(); }
+
+		iterator rbegin() { return m_container.begin(); }
+		const_iterator crbegin() const { return m_container.cbegin(); }
+
+		iterator rend() { return m_container.end(); }
+		const_iterator crend() const { return m_container.cend(); }
+	};
+
 	template <class Iter>
 	class move_iterator {
 	public:
@@ -280,6 +317,43 @@ namespace mm {
 	mm::move_iterator<Iter> make_move_iterator(Iter it) {
 		return mm::move_iterator<Iter>(it);
 	}
+
+	template <class Container>
+	class move_adapter {
+	public:
+		using container_type = Container;
+		using value_type = typename container_type::value_type;
+		using size_type = typename container_type::size_type;
+		using difference_type = typename container_type::difference_type;
+		using iterator = typename container_type::iterator;
+		using const_iterator = typename container_type::const_iterator;
+		using reverse_iterator = typename container_type::reverse_iterator;
+		using const_reverse_iterator = typename container_type::const_reverse_iterator;
+
+	private:
+		container_type& m_container;
+
+	public:
+		move_adapter() = delete;
+		move_adapter(const move_adapter&) = delete;
+		move_adapter(move_adapter&&) = delete;
+		move_adapter& operator=(const move_adapter&) = delete;
+		move_adapter& operator=(move_adapter&&) = delete;
+
+		move_adapter(const container_type& c) : m_container(c) {}
+
+		reverse_iterator begin() { return mm::make_move_iterator(m_container.begin()); }
+		const_reverse_iterator cbegin() const { return mm::make_move_iterator(m_container.cbegin()); }
+
+		reverse_iterator end() { return mm::make_move_iterator(m_container.end()); }
+		const_reverse_iterator cend() const { return mm::make_move_iterator(m_container.cend()); }
+
+		iterator rbegin() { return mm::make_move_iterator(m_container.begin()); }
+		const_iterator crbegin() const { return mm::make_move_iterator(m_container.crbegin()); }
+
+		iterator rend() { return mm::make_move_iterator(m_container.end()); }
+		const_iterator crend() const { return mm::make_move_iterator(m_container.crend()); }
+	};
 
 	template <class Container>
 	class back_insert_iterator {

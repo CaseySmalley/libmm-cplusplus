@@ -403,10 +403,237 @@ namespace mm {
 		}
 	};
 
+	template <class T,class Deleter>
+	class unique_ptr<T[],Deleter> {
+	public:
+		using pointer = decltype(detail::unique_ptr_pointer<T,Deleter>(0));
+		using element_type = T;
+		using deleter_type = Deleter;
+	
+	private:
+		pointer m_ptr;
+		deleter_type m_del;
+
+	public:
+		unique_ptr(const unique_ptr&) = delete;
+		unique_ptr& operator=(const unique_ptr&) = delete;
+
+		constexpr unique_ptr() : m_ptr(), m_del() {}
+		constexpr unique_ptr(mm::nullptr_t) : m_ptr(), m_del() {}
+		explicit unique_ptr(pointer ptr) : m_ptr(ptr), m_del() {}
+
+		template <class U>
+		explicit unique_ptr(U ptr) : m_ptr(ptr), m_del() {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_copy_constructible<D>::value
+		    && !mm::is_reference<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,const deleter_type& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_move_constructible<D>::value
+		    && !mm::is_reference<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,deleter_type&& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_lvalue_reference<D>::value
+		    && !mm::is_const<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,deleter_type& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+		       mm::is_lvalue_reference<D>::value
+		    && mm::is_const<D>::value
+		> = nullptr>
+		unique_ptr(pointer ptr,const deleter_type& del) : m_ptr(ptr), m_del(mm::forward<decltype(del)>(del)) {}
+
+		template <class D = deleter_type,mm::enable_if_t<
+			mm::is_move_constructible<D>::value
+		> = nullptr>
+		unique_ptr(unique_ptr&& other) : m_ptr(other.release()), m_del(mm::move(other.get_deleter())) {}
+
+		~unique_ptr() {
+			if (m_ptr) {
+				m_del(m_ptr);
+			}
+		}
+
+		template <class D = deleter_type,class = mm::enable_if_t<
+			mm::is_move_assignable<D>::value
+		>>
+		unique_ptr& operator=(unique_ptr&& other) {
+			reset(other.release());
+			m_del = mm::move(other.get_deleter());
+			return *this;
+		}
+
+		template <class U,class E,class = mm::enable_if_t<
+			!mm::is_array<U>::value
+		      && mm::is_convertible< typename unique_ptr<U,E>::pointer, pointer >::value
+		      && mm::is_assignable<deleter_type,E&&>::value
+		>>
+		unique_ptr& operator=(unique_ptr<U,E>&& other) {
+			reset(other.release());
+			m_del = mm::forward<E>(other.get_deleter());
+			return *this;
+		}
+
+		unique_ptr& operator=(mm::nullptr_t) {
+			reset();
+			return *this;
+		}
+
+		pointer release() {
+			pointer ptr = m_ptr;
+			m_ptr = pointer();
+			return ptr;
+		}
+
+		void reset(pointer ptr = pointer()) {
+			pointer old = m_ptr;
+			m_ptr = ptr;
+			
+			if (old) {
+				m_del(old);
+			}
+		}
+
+		template<class U>
+		void reset(U) = delete;
+
+		void reset(mm::nullptr_t) {
+			reset(pointer());
+		}
+	
+		void swap(unique_ptr& other) {
+			mm::swap(this->m_ptr,other.m_ptr);
+			mm::swap(this->m_del,other.m_del);
+		}
+
+		pointer get() const {
+			return m_ptr;
+		}
+
+		deleter_type& get_deleter() {
+			return m_del;
+		}
+
+		const deleter_type& get_deleter() const {
+			return m_del;
+		}
+
+		explicit operator bool() const {
+			return m_ptr != nullptr;
+		}
+
+		element_type& operator[](mm::size_t i) {
+			return m_ptr[i];
+		}
+	};
+
+	template <class T1,class D1,class T2,class D2>
+	bool operator==(const mm::unique_ptr<T1,D1>& lhs,const mm::unique_ptr<T2,D2>& rhs) {
+		return lhs.get() == rhs.get();
+	}
+
+	template <class T1,class D1,class T2,class D2>
+	bool operator!=(const mm::unique_ptr<T1,D1>& lhs,const mm::unique_ptr<T2,D2>& rhs) {
+		return lhs.get() != rhs.get();
+	}
+
+	template <class T1,class D1,class T2,class D2>
+	bool operator<(const mm::unique_ptr<T1,D1>& lhs,const mm::unique_ptr<T2,D2>& rhs) {
+		return lhs.get() < rhs.get();
+	}
+
+	template <class T1,class D1,class T2,class D2>
+	bool operator>(const mm::unique_ptr<T1,D1>& lhs,const mm::unique_ptr<T2,D2>& rhs) {
+		return lhs.get() > rhs.get();
+	}
+
+	template <class T1,class D1,class T2,class D2>
+	bool operator<=(const mm::unique_ptr<T1,D1>& lhs,const mm::unique_ptr<T2,D2>& rhs) {
+		return lhs.get() <= rhs.get();
+	}
+
+	template <class T1,class D1,class T2,class D2>
+	bool operator>=(const mm::unique_ptr<T1,D1>& lhs,const mm::unique_ptr<T2,D2>& rhs) {
+		return lhs.get() >= rhs.get();
+	}
+
+	template <class T,class D>
+	bool operator==(const unique_ptr<T,D>& ptr,mm::nullptr_t) {
+		return !bool(ptr);
+	}
+
+	template <class T,class D>
+	bool operator==(mm::nullptr_t,const unique_ptr<T,D>& ptr) {
+		return !bool(ptr);
+	}
+
+	template <class T,class D>
+	bool operator!=(const unique_ptr<T,D>& ptr,mm::nullptr_t) {
+		return bool(ptr);
+	}
+
+	template <class T,class D>
+	bool operator!=(mm::nullptr_t,const unique_ptr<T,D>& ptr) {
+		return bool(ptr);
+	}
+
+	template <class T,class D>
+	bool operator<(const unique_ptr<T,D>& ptr,mm::nullptr_t) {
+		return ptr.get() < nullptr;
+	}
+
+	template <class T,class D>
+	bool operator<(mm::nullptr_t,const unique_ptr<T,D>& ptr) {
+		return nullptr < ptr.get();
+	}
+
+	template <class T,class D>
+	bool operator>(const unique_ptr<T,D>& ptr,mm::nullptr_t) {
+		return ptr.get() > nullptr;
+	}
+
+	template <class T,class D>
+	bool operator>(mm::nullptr_t,const unique_ptr<T,D>& ptr) {
+		return nullptr > ptr.get();
+	}
+
+	template <class T,class D>
+	bool operator<=(const unique_ptr<T,D>& ptr,mm::nullptr_t) {
+		return ptr.get() <= nullptr;
+	}
+
+	template <class T,class D>
+	bool operator<=(mm::nullptr_t,const unique_ptr<T,D>& ptr) {
+		return nullptr <= ptr.get();
+	}
+
+	template <class T,class D>
+	bool operator>=(const unique_ptr<T,D>& ptr,mm::nullptr_t) {
+		return ptr.get() >= nullptr;
+	}
+
+	template <class T,class D>
+	bool operator>=(mm::nullptr_t,const unique_ptr<T,D>& ptr) {
+		return nullptr >= ptr.get();
+	}
+
 	template <class T,class... Args>
 	mm::unique_ptr<T> make_unique(Args&&... args) {
 		return mm::unique_ptr<T>(new T(mm::forward<Args>(args)...));
 	}
+
+	template <class T,class D>
+	void swap(mm::unique_ptr<T,D>& lhs,mm::unique_ptr<T,D>& rhs) {
+		lhs.swap(rhs);
+	}
+
+	// mm::hash<mm::unique_ptr>
 }
 
 #endif
