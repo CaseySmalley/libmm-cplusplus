@@ -68,9 +68,11 @@ namespace mm {
 	using i8 = int8_t;
 	using i16 = int16_t;
 	using i32 = int32_t;
+	using i64 = int64_t;
 	using u8 = uint8_t;
 	using u16 = uint32_t;
 	using u32 = uint32_t;
+	using u64 = uint64_t;
 	using f32 = float;
 	using f64 = double;
 	using size_t = size_t;
@@ -85,4 +87,9 @@ void* operator new[](mm::size_t bytes,void* ptr) { return ptr; }
 void operator delete(void* ptr) { free(ptr); }
 void operator delete[](void* ptr) { free(ptr); }
 
+#if defined(__GNUC__) || defined(__MINGW32__) || defined(__MINGW64__)
+extern "C" void __cxa_pure_virtual() {
+	exit(EXIT_FAILURE);
+}
+#endif
 #endif

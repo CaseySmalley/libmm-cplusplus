@@ -1,18 +1,12 @@
-#include "mm/functional.hpp"
+#include "mm/memory.hpp"
 #include <stdio.h>
 
+struct type {
+	type() { printf("constructor\n"); }
+	~type() { printf("destructor\n"); }
+};
+
 int main(int argc,const char *argv[]) {
-	int x = 1;
-	int y = 2;
-	int z = 3;
-
-	mm::reference_wrapper<int> arr[] {x,y,z};
-
-	y = 500;
-
-	for (int i : arr) {
-		printf("%d\n",i);
-	}
-
+	mm::shared_ptr<type> ptr(new type());
 	return 0;
 }

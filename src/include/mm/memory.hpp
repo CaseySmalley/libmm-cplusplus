@@ -11,6 +11,9 @@ namespace mm {
 		};
 	};
 
+	template <mm::size_t Length,mm::size_t Alignment>
+	using aligned_storage_t = typename mm::aligned_storage<Length,Alignment>::type;
+
 	template <mm::size_t Length,class... Ts>
 	struct aligned_union {
 		static constexpr mm::size_t alignment = mm::max(mm::integer_sequence<mm::size_t,alignof(Ts)...> {});
@@ -19,6 +22,12 @@ namespace mm {
 			alignas(alignment) mm::u8 data[mm::max(mm::integer_sequence<mm::size_t,Length,sizeof(Ts)...> {})];
 		};
 	};
+
+	template <mm::size_t Length,class... Ts>
+	using aligned_union_t = typename mm::aligned_union<Length,Ts...>::type;
+
+	template <class T>
+	struct alignment_of : mm::integral_constant<mm::size_t,alignof(T)> {};
 
 	namespace detail {
 		template <class Ptr> typename Ptr::element_type ptr_element_type(int);
@@ -190,7 +199,7 @@ namespace mm {
 	};
 
 	template <class T>
-	class allocator {
+	class default_allocator {
 	public:
 		using value_type = T;
 		using size_type = mm::size_t;
@@ -198,32 +207,32 @@ namespace mm {
 		using propagate_on_container_move_assignment = mm::true_t;
 		using is_always_equal = mm::true_t;
 
-		allocator() = default;
-		allocator(const allocator&) = default;
-		allocator(allocator&&) = default;
+		default_allocator() = default;
+		default_allocator(const default_allocator&) = default;
+		default_allocator(default_allocator&&) = default;
 
 		template <class U>
-		allocator(const allocator<U>&) {}
+		default_allocator(const default_allocator<U>&) {}
 
-		~allocator() = default;
+		~default_allocator() = default;
 
-		allocator& operator=(const allocator&) = default;
-		allocator& operator=(allocator&&) = default;
+		default_allocator& operator=(const default_allocator&) = default;
+		default_allocator& operator=(default_allocator&&) = default;
 
 		template <class U>
-		allocator& operator=(const allocator<U>&) {}
+		default_allocator& operator=(const default_allocator<U>&) {}
 
 		T* allocate(mm::size_t n) {
-			return ::operator new(n);
+			return static_cast<T*>(malloc(sizeof(T) * n));
 		}
 
-		void deallocate(T* p,mm::size_t n) {
-			::operator delete(p);
+		void deallocate(T* p,mm::size_t n) { printf("free %p\n",p);
+			free(static_cast<void*>(p));
 		}
 	};
 	
 	template <class T1,class T2>
-	bool operator==(const allocator<T1>&,const allocator<T2>&) {
+	bool operator==(const mm::default_allocator<T1>&,const mm::default_allocator<T2>&) {
 		return true;
 	}
 
@@ -243,12 +252,15 @@ namespace mm {
 		default_delete() = default;
 		default_delete(const default_delete&) = default;
 		default_delete(default_delete&&) = default;
-	
+
+		default_delete& operator=(const default_delete&) = default;
+		default_delete& operator=(default_delete&&) = default;
+
 		template <class U>
-		default_delete(const default_delete<T>&) {}
+		default_delete(const mm::default_delete<U>&) {}
 
 		void operator()(T* p) const {
-			::operator delete(p);
+			delete p;
 		}
 	};
 
@@ -262,7 +274,7 @@ namespace mm {
 		default_delete(const default_delete<T[]>&) {}
 
 		void operator()(T* p) const {
-			::operator delete[](p);
+			delete[] p;
 		}
 	};
 
@@ -323,7 +335,7 @@ namespace mm {
 			mm::is_convertible<typename unique_ptr<U,E>::pointer,pointer>::value
 		    && !mm::is_array<U>::value
 		    && ((mm::is_reference<deleter_type>::value && mm::is_same<deleter_type,E>::value)
-		    ||  (!mm::is_reference<deleter_type>::value && mm::is_convertible<E,deleter_type>::value))
+		    || (!mm::is_reference<deleter_type>::value && mm::is_convertible<E,deleter_type>::value))
 		> = nullptr>
 		unique_ptr(unique_ptr<U,E>&& other) : m_ptr(other.release()), m_del(mm::forward<E>(other.get_deleter())) {}
 
@@ -337,8 +349,7 @@ namespace mm {
 			mm::is_move_assignable<D>::value
 		>>
 		unique_ptr& operator=(unique_ptr&& other) {
-			reset(other.release());
-			m_del = mm::move(other.get_deleter());
+			unique_ptr(other).swap(*this);
 			return *this;
 		}
 
@@ -348,8 +359,7 @@ namespace mm {
 		      && mm::is_assignable<deleter_type,E&&>::value
 		>>
 		unique_ptr& operator=(unique_ptr<U,E>&& other) {
-			reset(other.release());
-			m_del = mm::forward<E>(other.get_deleter());
+			unique_ptr(other).swap(*this);
 			return *this;
 		}
 
@@ -464,8 +474,7 @@ namespace mm {
 			mm::is_move_assignable<D>::value
 		>>
 		unique_ptr& operator=(unique_ptr&& other) {
-			reset(other.release());
-			m_del = mm::move(other.get_deleter());
+			unique_ptr(other).swap(*this);
 			return *this;
 		}
 
@@ -475,8 +484,7 @@ namespace mm {
 		      && mm::is_assignable<deleter_type,E&&>::value
 		>>
 		unique_ptr& operator=(unique_ptr<U,E>&& other) {
-			reset(other.release());
-			m_del = mm::forward<E>(other.get_deleter());
+			unique_ptr(other).swap(*this);
 			return *this;
 		}
 
@@ -634,6 +642,224 @@ namespace mm {
 	}
 
 	// mm::hash<mm::unique_ptr>
+
+	template <class T>
+	class weak_ptr;
+
+	template <class T>
+	class shared_ptr {
+	public:
+		using element_type = T;
+		using weak_type = mm::weak_ptr<T>;
+
+	private:
+		class control_block {
+		protected:
+			mm::i32 m_ref_count;
+			mm::i32 m_weak_count;
+		
+		public:
+			control_block() : m_ref_count(1), m_weak_count(1) {}
+
+			control_block(const control_block&) = delete;
+			control_block(control_block&&) = delete;
+
+			mm::i32 ref_count() const {
+				return m_ref_count;
+			}
+
+			void inc_reference() {
+				++m_ref_count;
+				++m_weak_count;
+			}
+
+			void inc_weak_reference() {
+				++m_weak_count;
+			}
+
+			virtual void free_element() = 0;
+			virtual void free_control_block() = 0;
+
+			void release_reference() {
+				if (--m_ref_count > 0) {
+					--m_weak_count;
+				} else {
+					free_element();
+
+					if (m_weak_count == 0) {
+						free_control_block();
+					}
+				}
+			}
+
+			void release_weak_reference() {
+				if (--m_weak_count == 0) {
+					free_control_block();
+				}
+			}
+		};
+
+		template <class Alloc,class Deleter>
+		class control_block_ptr : public control_block {
+		private:
+			using element_type = T*;
+			using allocator_type = Alloc;
+			using deleter_type = Deleter;
+
+			element_type m_element;
+			allocator_type m_alloc;
+			deleter_type m_del;
+	
+		public:
+			control_block_ptr(element_type element,allocator_type alloc,deleter_type del) : 
+				control_block(),
+				m_element(element),
+				m_alloc(mm::move(alloc)),
+				m_del(del)
+			{}
+
+			virtual void free_element() override {
+				m_del(m_element);
+			}
+
+			virtual void free_control_block() override {
+				allocator_type alloc(m_alloc);
+				mm::destroy_at(this);
+
+				mm::allocator_traits<allocator_type>::deallocate(
+					alloc,
+					reinterpret_cast<mm::u8*>(this),
+					sizeof(*this)
+				);
+			}
+		};
+
+		template <class Alloc>
+		class control_block_inline : public control_block {
+		private:
+			using element_type = T;
+			using allocator_type = Alloc;
+			using storage_type = mm::aligned_storage_t<sizeof(element_type),mm::alignment_of<T>::value>;
+			
+			storage_type m_memory;
+			allocator_type m_alloc;
+
+			element_type* get_ptr() {
+				return static_cast<element_type*>(
+					static_cast<void*>(
+						mm::address_of(m_memory)
+					)
+				);
+			}
+
+		public:
+			template <class... Args>
+			control_block_inline(allocator_type alloc,Args&&... args) :
+				control_block(),
+				m_alloc(mm::move(alloc))
+			{
+				mm::construct_at(get_ptr(),mm::forward<Args>(args)...);
+			}
+
+			virtual void free_element() override {
+				mm::destroy_at(get_ptr());
+			}
+
+			virtual void free_control_block() override {
+				allocator_type alloc(m_alloc);
+				mm::destroy_at(this);
+				mm::allocator_traits<allocator_type>::deallocate(alloc,this,sizeof(*this));
+			}
+		};
+		
+		control_block *m_control;
+		element_type *m_element;
+
+		template <class U,class Alloc,class Deleter>
+		void allocate_control_block_with_ptr(U* ptr,Alloc alloc,Deleter del) {
+			using allocator_type = typename mm::allocator_traits<Alloc>::template rebind_alloc<mm::u8>;
+			using control_block_type = control_block_ptr<allocator_type,Deleter>;
+
+			allocator_type internal_alloc(alloc);
+			
+			void* memory = mm::allocator_traits<allocator_type>::allocate(
+				internal_alloc,
+				sizeof(control_block_type)
+			);
+
+			if (memory) {
+				m_control = mm::construct_at(
+					static_cast<control_block_type*>(memory),
+					ptr,
+					internal_alloc,
+					del
+				);
+
+				m_element = ptr;
+			}
+		}
+
+	public:
+		constexpr shared_ptr() = default;
+		constexpr shared_ptr(mm::nullptr_t) : m_control(), m_element() {}
+
+		template <class U,mm::enable_if_t<
+			mm::is_convertible<U*,element_type*>::value
+		> = nullptr>
+		explicit shared_ptr(U* ptr) : m_control(), m_element() {
+			allocate_control_block_with_ptr(
+				ptr,
+				mm::default_allocator<mm::u8>(),
+				mm::default_delete<T>()
+			);
+		}
+
+		template <class U,class Deleter,mm::enable_if_t<
+			mm::is_convertible<U*,element_type*>::value
+		     && mm::is_copy_constructible<Deleter>::value
+		> = nullptr>
+		shared_ptr(U* ptr,Deleter del) : m_control(), m_element() {
+			alloc_control_block_with_ptr(
+				ptr,
+				mm::default_allocator<mm::u8>(),
+				del
+			);
+		}
+
+		template <class Deleter,mm::enable_if_t<
+			mm::is_copy_constructible<Deleter>::value
+		> = nullptr>
+		shared_ptr(mm::nullptr_t,Deleter del) : m_control(), m_element() {
+			alloc_control_block_with_ptr(
+				nullptr,
+				mm::default_allocator<mm::u8>(),
+				del
+			);
+		}
+
+		template <class U,class Alloc,class Deleter,mm::enable_if_t<
+			mm::is_convertible<U*,element_type*>::value
+		     && mm::is_copy_constructible<Deleter>::value
+		> = nullptr>
+		shared_ptr(U* ptr,Alloc alloc,Deleter del) : m_control(), m_element() {
+			alloc_control_block_with_ptr(
+				ptr,
+				alloc,
+				del
+			);
+		}
+
+		~shared_ptr() {
+			m_control->release_reference();
+		}
+
+		void swap(shared_ptr& other) {
+			mm::swap(m_control,other.m_control);
+			mm::swap(m_element,other.m_element);
+		}
+	};
+
+	// mm::hash<mm::shared_ptr>
 }
 
 #endif
